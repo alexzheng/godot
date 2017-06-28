@@ -42,7 +42,7 @@
 #include "os/keyboard.h"
 #include "os/os.h"
 #include "scene/main/node.h"
-#include "scene/main/scene_main_loop.h"
+#include "scene/main/scene_tree.h"
 #include "scene/main/viewport.h"
 #include "translations.gen.h"
 #include "version.h"
@@ -517,6 +517,9 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 
 	set("interface/separate_distraction_mode", false);
 
+	set("interface/save_each_scene_on_quit", true); // Regression
+	set("interface/quit_confirmation", true);
+
 	set("interface/theme/preset", 0);
 	hints["interface/theme/preset"] = PropertyInfo(Variant::INT, "interface/theme/preset", PROPERTY_HINT_ENUM, "Default,Grey,Godot 2,Arc,Custom", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	set("interface/theme/base_color", Color::html("#273241"));
@@ -734,7 +737,7 @@ void EditorSettings::_load_default_text_editor_theme() {
 	set("text_editor/highlighting/string_color", Color::html("ef6ebe"));
 	set("text_editor/highlighting/number_color", Color::html("EB9532"));
 	set("text_editor/highlighting/symbol_color", Color::html("badfff"));
-	set("text_editor/highlighting/selection_color", Color::html("7b5dbe"));
+	set("text_editor/highlighting/selection_color", Color::html("6ca9c2"));
 	set("text_editor/highlighting/brace_mismatch_color", Color(1, 0.2, 0.2));
 	set("text_editor/highlighting/current_line_color", Color(0.3, 0.5, 0.8, 0.15));
 	set("text_editor/highlighting/line_length_guideline_color", Color(0.3, 0.5, 0.8, 0.1));

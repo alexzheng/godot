@@ -57,7 +57,10 @@ public:
 
 	enum ContextAction {
 		CONTEXT_ADD_POINT = 0,
-		CONTEXT_REMOVE_POINT
+		CONTEXT_REMOVE_POINT,
+		CONTEXT_LINEAR,
+		CONTEXT_LEFT_LINEAR,
+		CONTEXT_RIGHT_LINEAR
 	};
 
 	enum TangentIndex {
@@ -79,12 +82,12 @@ private:
 
 	void open_context_menu(Vector2 pos);
 	int get_point_at(Vector2 pos) const;
-	int get_tangent_at(Vector2 pos) const;
+	TangentIndex get_tangent_at(Vector2 pos) const;
 	void add_point(Vector2 pos);
 	void remove_point(int index);
+	void toggle_linear(TangentIndex tangent = TANGENT_NONE);
 	void set_selected_point(int index);
 	void set_hover_point_index(int index);
-	void push_undo(Array previous_curve_data);
 	void update_view_transform();
 
 	Vector2 get_tangent_view_pos(int i, TangentIndex tangent) const;
@@ -96,7 +99,6 @@ private:
 	void stroke_rect(Rect2 rect, Color color);
 
 private:
-	Rect2 _world_rect;
 	Transform2D _world_to_view;
 
 	Ref<Curve> _curve_ref;
@@ -105,12 +107,11 @@ private:
 
 	Array _undo_data;
 	bool _has_undo_data;
-	bool _undo_no_commit;
 
 	Vector2 _context_click_pos;
 	int _selected_point;
 	int _hover_point;
-	int _selected_tangent;
+	TangentIndex _selected_tangent;
 	bool _dragging;
 
 	// Constant
