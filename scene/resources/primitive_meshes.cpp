@@ -53,7 +53,15 @@ void PrimitiveMesh::_update() {
 	emit_changed();
 }
 
-void PrimitiveMesh::_queue_update() {
+void PrimitiveMesh::_queue_update(bool p_first_mesh) {
+
+	if (first_mesh && p_first_mesh) {
+		first_mesh = false;
+		cache_is_dirty = true;
+		_update();
+		return;
+	}
+
 	if (!cache_is_dirty) {
 		cache_is_dirty = true;
 		call_deferred("_update");
@@ -145,6 +153,7 @@ PrimitiveMesh::PrimitiveMesh() {
 
 	// make sure we do an update after we've finished constructing our object
 	cache_is_dirty = false;
+	first_mesh = true;
 	_queue_update();
 }
 
@@ -162,7 +171,9 @@ void CapsuleMesh::_create_mesh_array(Array &p_arr) {
 	float onethird = 1.0 / 3.0;
 	float twothirds = 2.0 / 3.0;
 
-	set_aabb(Rect3(Vector3(-radius, (mid_height * -0.5) - radius, -radius), Vector3(radius * 2.0, mid_height + (2.0 * radius), radius * 2.0)));
+	// note, this has been aligned with our collision shape but I've left the descriptions as top/middle/bottom
+
+	set_aabb(Rect3(Vector3(-radius, -radius, (mid_height * -0.5) - radius), Vector3(radius * 2.0, radius * 2.0, mid_height + (2.0 * radius))));
 
 	PoolVector<Vector3> points;
 	PoolVector<Vector3> normals;
@@ -186,19 +197,19 @@ void CapsuleMesh::_create_mesh_array(Array &p_arr) {
 
 		v /= (rings + 1);
 		w = sin(0.5 * Math_PI * v);
-		y = radius * cos(0.5 * Math_PI * v);
+		z = radius * cos(0.5 * Math_PI * v);
 
 		for (i = 0; i <= radial_segments; i++) {
 			u = i;
 			u /= radial_segments;
 
 			x = sin(u * (Math_PI * 2.0));
-			z = cos(u * (Math_PI * 2.0));
+			y = -cos(u * (Math_PI * 2.0));
 
-			Vector3 p = Vector3(x * radius * w, y, z * radius * w);
-			points.push_back(p + Vector3(0.0, 0.5 * mid_height, 0.0));
+			Vector3 p = Vector3(x * radius * w, y * radius * w, z);
+			points.push_back(p + Vector3(0.0, 0.0, 0.5 * mid_height));
 			normals.push_back(p.normalized());
-			ADD_TANGENT(-z, 0.0, x, -1.0)
+			ADD_TANGENT(y, -x, 0.0, -1.0)
 			uvs.push_back(Vector2(u, v * onethird));
 			point++;
 
@@ -224,20 +235,20 @@ void CapsuleMesh::_create_mesh_array(Array &p_arr) {
 		v = j;
 		v /= (rings + 1);
 
-		y = mid_height * v;
-		y = (mid_height * 0.5) - y;
+		z = mid_height * v;
+		z = (mid_height * 0.5) - z;
 
 		for (i = 0; i <= radial_segments; i++) {
 			u = i;
 			u /= radial_segments;
 
 			x = sin(u * (Math_PI * 2.0));
-			z = cos(u * (Math_PI * 2.0));
+			y = -cos(u * (Math_PI * 2.0));
 
-			Vector3 p = Vector3(x * radius, y, z * radius);
+			Vector3 p = Vector3(x * radius, y * radius, z);
 			points.push_back(p);
-			normals.push_back(Vector3(x, 0.0, z));
-			ADD_TANGENT(-z, 0.0, x, -1.0)
+			normals.push_back(Vector3(x, y, 0.0));
+			ADD_TANGENT(y, -x, 0.0, -1.0)
 			uvs.push_back(Vector2(u, onethird + (v * onethird)));
 			point++;
 
@@ -266,19 +277,19 @@ void CapsuleMesh::_create_mesh_array(Array &p_arr) {
 		v /= (rings + 1);
 		v += 1.0;
 		w = sin(0.5 * Math_PI * v);
-		y = radius * cos(0.5 * Math_PI * v);
+		z = radius * cos(0.5 * Math_PI * v);
 
 		for (i = 0; i <= radial_segments; i++) {
 			float u = i;
 			u /= radial_segments;
 
 			x = sin(u * (Math_PI * 2.0));
-			z = cos(u * (Math_PI * 2.0));
+			y = -cos(u * (Math_PI * 2.0));
 
-			Vector3 p = Vector3(x * radius * w, y, z * radius * w);
-			points.push_back(p + Vector3(0.0, -0.5 * mid_height, 0.0));
+			Vector3 p = Vector3(x * radius * w, y * radius * w, z);
+			points.push_back(p + Vector3(0.0, 0.0, -0.5 * mid_height));
 			normals.push_back(p.normalized());
-			ADD_TANGENT(-z, 0.0, x, -1.0)
+			ADD_TANGENT(y, -x, 0.0, -1.0)
 			uvs.push_back(Vector2(u, twothirds + ((v - 1.0) * onethird)));
 			point++;
 
@@ -350,7 +361,7 @@ int CapsuleMesh::get_radial_segments() const {
 
 void CapsuleMesh::set_rings(const int p_rings) {
 	rings = p_rings > 1 ? p_rings : 1;
-	_queue_update();
+	_queue_update(true); //last property set, force update mesh
 }
 
 int CapsuleMesh::get_rings() const {
@@ -608,7 +619,7 @@ int CubeMesh::get_subdivide_height() const {
 
 void CubeMesh::set_subdivide_depth(const int p_subdivide) {
 	subdivide_d = p_subdivide > 0 ? p_subdivide : 0;
-	_queue_update();
+	_queue_update(true); //last property set, force update mesh
 }
 
 int CubeMesh::get_subdivide_depth() const {
@@ -825,7 +836,7 @@ int CylinderMesh::get_radial_segments() const {
 
 void CylinderMesh::set_rings(const int p_rings) {
 	rings = p_rings > 0 ? p_rings : 0;
-	_queue_update();
+	_queue_update(true); //last property set, force update mesh
 }
 
 int CylinderMesh::get_rings() const {
@@ -942,7 +953,7 @@ int PlaneMesh::get_subdivide_width() const {
 
 void PlaneMesh::set_subdivide_depth(const int p_subdivide) {
 	subdivide_d = p_subdivide > 0 ? p_subdivide : 0;
-	_queue_update();
+	_queue_update(true); //last property set, force update mesh
 }
 
 int PlaneMesh::get_subdivide_depth() const {
@@ -1232,7 +1243,7 @@ int PrismMesh::get_subdivide_height() const {
 
 void PrismMesh::set_subdivide_depth(const int p_divisions) {
 	subdivide_d = p_divisions > 0 ? p_divisions : 0;
-	_queue_update();
+	_queue_update(true); //last property set, force update mesh
 }
 
 int PrismMesh::get_subdivide_depth() const {
@@ -1301,6 +1312,7 @@ void QuadMesh::_bind_methods() {
 
 QuadMesh::QuadMesh() {
 	primitive_type = PRIMITIVE_TRIANGLE_FAN;
+	_queue_update(true);
 }
 
 /**
@@ -1437,7 +1449,7 @@ int SphereMesh::get_rings() const {
 
 void SphereMesh::set_is_hemisphere(const bool p_is_hemisphere) {
 	is_hemisphere = p_is_hemisphere;
-	_queue_update();
+	_queue_update(true); //last property set, force update mesh
 }
 
 bool SphereMesh::get_is_hemisphere() const {

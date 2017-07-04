@@ -416,6 +416,8 @@ void EditorNode::_fs_changed() {
 			}
 		}
 	}
+
+	_mark_unsaved_scenes();
 }
 
 void EditorNode::_sources_changed(bool p_exist) {
@@ -976,6 +978,29 @@ void EditorNode::_save_all_scenes() {
 	}
 
 	_save_default_environment();
+}
+
+void EditorNode::_mark_unsaved_scenes() {
+
+	for (int i = 0; i < editor_data.get_edited_scene_count(); i++) {
+
+		Node *node = editor_data.get_edited_scene_root(i);
+		if (!node)
+			continue;
+
+		String path = node->get_filename();
+		if (!(path == String() || FileAccess::exists(path))) {
+
+			node->set_filename("");
+			if (i == editor_data.get_edited_scene())
+				set_current_version(-1);
+			else
+				editor_data.set_edited_scene_version(-1, i);
+		}
+	}
+
+	_update_title();
+	_update_scene_tabs();
 }
 
 void EditorNode::_import_action(const String &p_action) {
@@ -2462,6 +2487,7 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 						confirmation->popup_centered_minsize();
 					} else {
 						_discard_changes();
+						break;
 					}
 				} else {
 
@@ -2488,6 +2514,8 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 					}
 				}
 
+				if (OS::get_singleton()->is_window_minimized())
+					OS::get_singleton()->request_attention();
 				break;
 			}
 
@@ -2643,7 +2671,7 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 			OS::get_singleton()->shell_open("https://godotengine.org/community");
 		} break;
 		case HELP_ABOUT: {
-			about->popup_centered_minsize(Size2(500, 130) * EDSCALE);
+			about->popup_centered_minsize(Size2(780, 500) * EDSCALE);
 		} break;
 		case SOURCES_REIMPORT: {
 
@@ -4389,8 +4417,14 @@ void EditorNode::_scene_tab_input(const Ref<InputEvent> &p_input) {
 	Ref<InputEventMouseButton> mb = p_input;
 
 	if (mb.is_valid()) {
-		if (mb->get_button_index() == BUTTON_MIDDLE && mb->is_pressed() && scene_tabs->get_hovered_tab() >= 0) {
-			_scene_tab_closed(scene_tabs->get_hovered_tab());
+		if (scene_tabs->get_hovered_tab() >= 0) {
+			if (mb->get_button_index() == BUTTON_MIDDLE && mb->is_pressed()) {
+				_scene_tab_closed(scene_tabs->get_hovered_tab());
+			}
+		} else {
+			if ((mb->get_button_index() == BUTTON_LEFT && mb->is_doubleclick()) || (mb->get_button_index() == BUTTON_MIDDLE && mb->is_pressed())) {
+				_menu_option_confirm(FILE_NEW_SCENE, true);
+			}
 		}
 	}
 }
@@ -5026,6 +5060,7 @@ EditorNode::EditorNode() {
 
 	EditorHelp::generate_doc(); //before any editor classes are crated
 	SceneState::set_disable_placeholders(true);
+	ResourceLoader::clear_translation_remaps(); //no remaps using during editor
 	editor_initialize_certificates(); //for asset sharing
 
 	InputDefault *id = Input::get_singleton()->cast_to<InputDefault>();
@@ -6038,52 +6073,73 @@ EditorNode::EditorNode() {
 	export_template_manager = memnew(ExportTemplateManager);
 	gui_base->add_child(export_template_manager);
 
-	about = memnew(AcceptDialog);
-	about->set_title(TTR("Thanks from the Godot community!"));
-	about->get_ok()->set_text(TTR("Thanks!"));
-	about->set_hide_on_ok(true);
-	gui_base->add_child(about);
-	VBoxContainer *vbc = memnew(VBoxContainer);
-	HBoxContainer *hbc = memnew(HBoxContainer);
-	hbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	hbc->set_alignment(BoxContainer::ALIGN_CENTER);
-	about->add_child(vbc);
-	vbc->add_child(hbc);
-	Label *about_text = memnew(Label);
-	about_text->set_text(VERSION_FULL_NAME + String::utf8("\n\u00A9 2007-2017 Juan Linietsky, Ariel Manzur.\n\u00A9 2014-2017 ") + TTR("Godot Engine contributors") + "\n");
-	TextureRect *logo = memnew(TextureRect);
-	logo->set_texture(gui_base->get_icon("Logo", "EditorIcons"));
-	hbc->add_child(logo);
-	hbc->add_child(about_text);
-	TabContainer *tc = memnew(TabContainer);
-	tc->set_custom_minimum_size(Vector2(740, 300));
-	vbc->add_child(tc);
-	ScrollContainer *dev_base = memnew(ScrollContainer);
-	dev_base->set_name(TTR("Developers"));
-	tc->add_child(dev_base);
-	HBoxContainer *dev_hbc = memnew(HBoxContainer);
-	dev_hbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	dev_base->add_child(dev_hbc);
-	for (int i = 0; i < 3; i++) {
-		Label *dev_label = memnew(Label);
-		dev_label->set_h_size_flags(Control::SIZE_EXPAND);
-		dev_label->set_v_size_flags(Control::SIZE_FILL);
-		dev_hbc->add_child(dev_label);
-	}
-	int dev_name_index = 0;
-	int dev_name_column = 0;
-	const int dev_index_max = AUTHORS_COUNT / 3 + (AUTHORS_COUNT % 3 == 0 ? 0 : 1);
-	String dev_name = "";
-	const char **dev_names_ptr = dev_names;
-	while (*dev_names_ptr) {
-		dev_name += String::utf8(*dev_names_ptr++);
-		if (++dev_name_index == dev_index_max || !*dev_names_ptr) {
-			dev_hbc->get_child(dev_name_column)->cast_to<Label>()->set_text(dev_name);
-			dev_name_column++;
-			dev_name = "";
-			dev_name_index = 0;
-		} else {
-			dev_name += "\n";
+	{
+
+		about = memnew(AcceptDialog);
+		about->set_title(TTR("Thanks from the Godot community!"));
+		about->get_ok()->set_text(TTR("Thanks!"));
+		about->set_hide_on_ok(true);
+		about->set_resizable(true);
+		gui_base->add_child(about);
+
+		VBoxContainer *vbc = memnew(VBoxContainer);
+		HBoxContainer *hbc = memnew(HBoxContainer);
+		hbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+		hbc->set_alignment(BoxContainer::ALIGN_CENTER);
+		hbc->add_constant_override("separation", 30 * EDSCALE);
+		about->add_child(vbc);
+		vbc->add_child(hbc);
+
+		TextureRect *logo = memnew(TextureRect);
+		logo->set_texture(gui_base->get_icon("Logo", "EditorIcons"));
+		hbc->add_child(logo);
+
+		Label *about_text = memnew(Label);
+		about_text->set_text(VERSION_FULL_NAME + String::utf8("\n\u00A9 2007-2017 Juan Linietsky, Ariel Manzur.\n\u00A9 2014-2017 ") +
+							 TTR("Godot Engine contributors") + "\n");
+		hbc->add_child(about_text);
+
+		TabContainer *tc = memnew(TabContainer);
+		tc->set_custom_minimum_size(Size2(600, 240) * EDSCALE);
+		tc->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+		vbc->add_child(tc);
+
+		ScrollContainer *dev_base = memnew(ScrollContainer);
+		dev_base->set_name(TTR("Authors"));
+		dev_base->set_v_size_flags(Control::SIZE_EXPAND);
+		tc->add_child(dev_base);
+
+		VBoxContainer *dev_vbc = memnew(VBoxContainer);
+		dev_vbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+		dev_base->add_child(dev_vbc);
+
+		List<String> dev_sections;
+		dev_sections.push_back(TTR("Project Founders"));
+		dev_sections.push_back(TTR("Lead Developer"));
+		dev_sections.push_back(TTR("Project Manager"));
+		dev_sections.push_back(TTR("Developers"));
+
+		const char **dev_src[] = { dev_founders, dev_lead, dev_manager, dev_names };
+
+		for (int i = 0; i < dev_sections.size(); i++) {
+
+			Label *lbl = memnew(Label);
+			lbl->set_text(dev_sections[i]);
+			dev_vbc->add_child(lbl);
+
+			ItemList *il = memnew(ItemList);
+			il->set_max_columns(32);
+			il->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+			il->set_custom_minimum_size(Size2(0, i == 3 ? DEV_NAMES_COUNT * 7.6 : 30) * EDSCALE);
+			const char **dev_names_ptr = dev_src[i];
+			while (*dev_names_ptr)
+				il->add_item(String::utf8(*dev_names_ptr++), NULL, false);
+			dev_vbc->add_child(il);
+			il->set_fixed_column_width(240 * EDSCALE);
+
+			HSeparator *hs = memnew(HSeparator);
+			hs->set_modulate(Color(0, 0, 0, 0));
+			dev_vbc->add_child(hs);
 		}
 	}
 
