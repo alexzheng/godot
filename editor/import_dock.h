@@ -57,12 +57,19 @@ class ImportDock : public VBoxContainer {
 
 	void _reimport();
 
+	enum {
+		ITEM_SET_AS_DEFAULT = 100,
+		ITEM_LOAD_DEFAULT,
+		ITEM_CLEAR_DEFAULT,
+	};
+
 protected:
 	static void _bind_methods();
 
 public:
 	void set_edit_path(const String &p_path);
 	void set_edit_multiple_paths(const Vector<String> &p_paths);
+	void initialize_import_options() const;
 	void clear();
 
 	ImportDock();

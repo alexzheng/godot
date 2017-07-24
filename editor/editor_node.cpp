@@ -30,7 +30,6 @@
 #include "editor_node.h"
 
 #include "animation_editor.h"
-#include "authors.gen.h"
 #include "bind/core_bind.h"
 #include "class_db.h"
 #include "core/io/resource_loader.h"
@@ -39,11 +38,9 @@
 #include "editor_help.h"
 #include "editor_settings.h"
 #include "editor_themes.h"
-#include "global_config.h"
 #include "io/config_file.h"
 #include "io/stream_peer_ssl.h"
 #include "io/zip_io.h"
-#include "license.gen.h"
 #include "main/input_default.h"
 #include "message_queue.h"
 #include "os/file_access.h"
@@ -52,6 +49,7 @@
 #include "os/os.h"
 #include "path_remap.h"
 #include "print_string.h"
+#include "project_settings.h"
 #include "pvrtc_compress.h"
 #include "register_exporters.h"
 #include "scene/resources/packed_scene.h"
@@ -163,7 +161,7 @@ void EditorNode::_update_scene_tabs() {
 
 void EditorNode::_update_title() {
 
-	String appname = GlobalConfig::get_singleton()->get("application/config/name");
+	String appname = ProjectSettings::get_singleton()->get("application/config/name");
 	String title = appname.empty() ? String(VERSION_FULL_NAME) : String(_MKSTR(VERSION_NAME) + String(" - ") + appname);
 	String edited = editor_data.get_edited_scene_root() ? editor_data.get_edited_scene_root()->get_filename() : String();
 	if (!edited.empty())
@@ -272,7 +270,7 @@ void EditorNode::_notification(int p_what) {
 		}
 		editor_selection->update();
 
-		scene_root->set_size_override(true, Size2(GlobalConfig::get_singleton()->get("display/window/size/width"), GlobalConfig::get_singleton()->get("display/window/size/height")));
+		scene_root->set_size_override(true, Size2(ProjectSettings::get_singleton()->get("display/window/size/width"), ProjectSettings::get_singleton()->get("display/window/size/height")));
 
 		ResourceImporterTexture::get_singleton()->update_imports();
 	}
@@ -519,7 +517,7 @@ void EditorNode::save_resource_in_path(const Ref<Resource> &p_resource, const St
 		flg|=ResourceSaver::FLAG_RELATIVE_PATHS;
 	*/
 
-	String path = GlobalConfig::get_singleton()->localize_path(p_path);
+	String path = ProjectSettings::get_singleton()->localize_path(p_path);
 	Error err = ResourceSaver::save(path, p_resource, flg | ResourceSaver::FLAG_REPLACE_SUBRESOURCE_PATHS);
 
 	if (err != OK) {
@@ -870,7 +868,7 @@ void EditorNode::_save_scene_with_preview(String p_file) {
 
 		//save thumbnail directly, as thumbnailer may not update due to actual scene not changing md5
 		String temp_path = EditorSettings::get_singleton()->get_settings_path().plus_file("tmp");
-		String cache_base = GlobalConfig::get_singleton()->globalize_path(p_file).md5_text();
+		String cache_base = ProjectSettings::get_singleton()->globalize_path(p_file).md5_text();
 		cache_base = temp_path.plus_file("resthumb-" + cache_base);
 
 		//does not have it, try to load a cached thumbnail
@@ -950,7 +948,7 @@ void EditorNode::_save_scene(String p_file, int idx) {
 	_save_edited_subresources(scene, processed, flg);
 	editor_data.save_editor_external_data();
 	if (err == OK) {
-		scene->set_filename(GlobalConfig::get_singleton()->localize_path(p_file));
+		scene->set_filename(ProjectSettings::get_singleton()->localize_path(p_file));
 		//EditorFileSystem::get_singleton()->update_file(p_file,sdata->get_type());
 		if (idx < 0 || idx == editor_data.get_edited_scene())
 			set_current_version(editor_data.get_undo_redo().get_version());
@@ -1029,7 +1027,7 @@ void EditorNode::_import_action(const String &p_action) {
 		EditorImport::generate_version_hashes(src);
 
 
-		Node *dst = SceneLoader::load(editor_data.get_imported_scene(GlobalConfig::get_singleton()->localize_path(_tmp_import_path)));
+		Node *dst = SceneLoader::load(editor_data.get_imported_scene(ProjectSettings::get_singleton()->localize_path(_tmp_import_path)));
 
 		if (!dst) {
 
@@ -1132,8 +1130,8 @@ void EditorNode::_dialog_action(String p_file) {
 		} break;
 		case SETTINGS_PICK_MAIN_SCENE: {
 
-			GlobalConfig::get_singleton()->set("application/run/main_scene", p_file);
-			GlobalConfig::get_singleton()->save();
+			ProjectSettings::get_singleton()->set("application/run/main_scene", p_file);
+			ProjectSettings::get_singleton()->save();
 			//would be nice to show the project manager opened with the highlighted field..
 			_run(false, ""); // automatically run the project
 		} break;
@@ -1575,6 +1573,11 @@ void EditorNode::_edit_current() {
 
 				editor_plugin_screen->make_visible(true);
 
+				int plugin_count = editor_data.get_editor_plugin_count();
+				for (int i = 0; i < plugin_count; i++) {
+					editor_data.get_editor_plugin(i)->notify_main_screen_changed(editor_plugin_screen->get_name());
+				}
+
 				for (int i = 0; i < editor_table.size(); i++) {
 
 					main_editor_buttons[i]->set_pressed(editor_table[i] == main_plugin);
@@ -1628,7 +1631,7 @@ void EditorNode::_edit_current() {
 		p->add_separator();
 		p->add_shortcut(ED_SHORTCUT("property_editor/make_subresources_unique", TTR("Make Sub-Resources Unique")), OBJECT_UNIQUE_RESOURCES);
 		p->add_separator();
-		p->add_icon_shortcut(gui_base->get_icon("Help", "EditorIcons"), ED_SHORTCUT("property_editor/open_help", TTR("Open in Help")), OBJECT_REQUEST_HELP);
+		p->add_icon_shortcut(gui_base->get_icon("HelpSearch", "EditorIcons"), ED_SHORTCUT("property_editor/open_help", TTR("Open in Help")), OBJECT_REQUEST_HELP);
 	}
 
 	List<MethodInfo> methods;
@@ -1797,7 +1800,7 @@ void EditorNode::_run(bool p_current, const String &p_custom) {
 	List<String> breakpoints;
 	editor_data.get_editor_breakpoints(&breakpoints);
 
-	args = GlobalConfig::get_singleton()->get("editor/main_run_args");
+	args = ProjectSettings::get_singleton()->get("editor/main_run_args");
 
 	Error error = editor_run.run(run_filename, args, breakpoints);
 
@@ -2264,7 +2267,7 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 			}
 
 			instanced_scene->generate_instance_state();
-			instanced_scene->set_filename( GlobalConfig::get_singleton()->localize_path(external_file) );
+			instanced_scene->set_filename( ProjectSettings::get_singleton()->localize_path(external_file) );
 
 			editor_data.get_undo_redo().create_action("Instance Scene");
 			editor_data.get_undo_redo().add_do_method(parent,"add_child",instanced_scene);
@@ -2515,8 +2518,7 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 					}
 				}
 
-				if (OS::get_singleton()->is_window_minimized())
-					OS::get_singleton()->request_attention();
+				OS::get_singleton()->request_attention();
 				break;
 			}
 
@@ -2865,6 +2867,11 @@ void EditorNode::_editor_select(int p_which) {
 	editor_plugin_screen->make_visible(true);
 	editor_plugin_screen->selected_notify();
 
+	int plugin_count = editor_data.get_editor_plugin_count();
+	for (int i = 0; i < plugin_count; i++) {
+		editor_data.get_editor_plugin(i)->notify_main_screen_changed(editor_plugin_screen->get_name());
+	}
+
 	if (EditorSettings::get_singleton()->get("interface/separate_distraction_mode")) {
 		if (p_which == EDITOR_SCRIPT) {
 			set_distraction_free_mode(script_distraction);
@@ -2913,7 +2920,6 @@ void EditorNode::remove_editor_plugin(EditorPlugin *p_editor) {
 			}
 		}
 
-		//singleton->main_editor_tabs->add_tab(p_editor->get_name());
 		singleton->editor_table.erase(p_editor);
 	}
 	p_editor->make_visible(false);
@@ -2935,9 +2941,9 @@ void EditorNode::_update_addon_config() {
 	}
 
 	if (enabled_addons.size() == 0) {
-		GlobalConfig::get_singleton()->set("editor_plugins/enabled", Variant());
+		ProjectSettings::get_singleton()->set("editor_plugins/enabled", Variant());
 	} else {
-		GlobalConfig::get_singleton()->set("editor_plugins/enabled", enabled_addons);
+		ProjectSettings::get_singleton()->set("editor_plugins/enabled", enabled_addons);
 	}
 
 	project_settings->queue_save();
@@ -3278,7 +3284,7 @@ Error EditorNode::load_scene(const String &p_scene, bool p_ignore_broken_deps, b
 	if (p_clear_errors)
 		load_errors->clear();
 
-	String lpath = GlobalConfig::get_singleton()->localize_path(p_scene);
+	String lpath = ProjectSettings::get_singleton()->localize_path(p_scene);
 
 	if (!lpath.begins_with("res://")) {
 
@@ -3566,7 +3572,7 @@ void EditorNode::animation_editor_make_visible(bool p_visible) {
 #endif
 void EditorNode::_add_to_recent_scenes(const String &p_scene) {
 
-	String base = "_" + GlobalConfig::get_singleton()->get_resource_path().replace("\\", "::").replace("/", "::");
+	String base = "_" + ProjectSettings::get_singleton()->get_resource_path().replace("\\", "::").replace("/", "::");
 	Vector<String> rc = EDITOR_DEF(base + "/_recent_scenes", Array());
 	String name = p_scene;
 	name = name.replace("res://", "");
@@ -3583,21 +3589,12 @@ void EditorNode::_add_to_recent_scenes(const String &p_scene) {
 
 void EditorNode::_open_recent_scene(int p_idx) {
 
-	String base = "_" + GlobalConfig::get_singleton()->get_resource_path().replace("\\", "::").replace("/", "::");
+	String base = "_" + ProjectSettings::get_singleton()->get_resource_path().replace("\\", "::").replace("/", "::");
 	Vector<String> rc = EDITOR_DEF(base + "/_recent_scenes", Array());
 
 	ERR_FAIL_INDEX(p_idx, rc.size());
 
 	String path = "res://" + rc[p_idx];
-
-	/*if (unsaved_cache) {
-		_recent_scene=rc[p_idx];
-		open_recent_confirmation->set_text("Discard current scene and open:\n'"+rc[p_idx]+"'");
-		open_recent_confirmation->get_label()->set_align(Label::ALIGN_CENTER);
-		open_recent_confirmation->popup_centered(Size2(400,100));
-		return;
-	}*/
-
 	load_scene(path);
 }
 
@@ -3635,13 +3632,13 @@ void EditorNode::_save_optimized() {
 
 	}
 
-	project_settings->add_remapped_path(GlobalConfig::get_singleton()->localize_path(get_edited_scene()->get_filename()),GlobalConfig::get_singleton()->localize_path(path),platform);
+	project_settings->add_remapped_path(ProjectSettings::get_singleton()->localize_path(get_edited_scene()->get_filename()),ProjectSettings::get_singleton()->localize_path(path),platform);
 #endif
 }
 
 void EditorNode::_update_recent_scenes() {
 
-	String base = "_" + GlobalConfig::get_singleton()->get_resource_path().replace("\\", "::").replace("/", "::");
+	String base = "_" + ProjectSettings::get_singleton()->get_resource_path().replace("\\", "::").replace("/", "::");
 	Vector<String> rc = EDITOR_DEF(base + "/_recent_scenes", Array());
 	recent_scenes->clear();
 	for (int i = 0; i < rc.size(); i++) {
@@ -3756,6 +3753,7 @@ void EditorNode::register_editor_types() {
 	ClassDB::register_class<EditorResourcePreviewGenerator>();
 	ClassDB::register_class<EditorFileSystem>();
 	ClassDB::register_class<EditorFileSystemDirectory>();
+	ClassDB::register_virtual_class<ScriptEditor>();
 
 	//ClassDB::register_type<EditorImporter>();
 	//ClassDB::register_type<EditorPostImport>();
@@ -4959,13 +4957,6 @@ void EditorNode::_check_gui_base_size() {
 	}
 }
 
-void EditorNode::_license_tree_selected() {
-
-	TreeItem *selected = _tpl_tree->get_selected();
-	_tpl_text->select(0, 0, 0, 0);
-	_tpl_text->set_text(selected->get_metadata(0));
-}
-
 void EditorNode::open_export_template_manager() {
 
 	export_template_manager->popup_manager();
@@ -5055,8 +5046,6 @@ void EditorNode::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_inherit_imported"), &EditorNode::_inherit_imported);
 	ClassDB::bind_method(D_METHOD("_dim_timeout"), &EditorNode::_dim_timeout);
 	ClassDB::bind_method(D_METHOD("_check_gui_base_size"), &EditorNode::_check_gui_base_size);
-
-	ClassDB::bind_method(D_METHOD("_license_tree_selected"), &EditorNode::_license_tree_selected);
 
 	ADD_SIGNAL(MethodInfo("play_pressed"));
 	ADD_SIGNAL(MethodInfo("pause_pressed"));
@@ -5222,28 +5211,9 @@ EditorNode::EditorNode() {
 	main_vbox->set_area_as_parent_rect(8);
 	main_vbox->set_margin(MARGIN_TOP, 5);
 
-#if 0
-	PanelContainer *top_dark_panel = memnew( PanelContainer );
-	Ref<StyleBoxTexture> top_dark_sb;
-	top_dark_sb.instance();
-	top_dark_sb->set_texture(theme->get_icon("PanelTop","EditorIcons"));
-	for(int i=0;i<4;i++) {
-		top_dark_sb->set_margin_size(Margin(i),3);
-		top_dark_sb->set_default_margin(Margin(i),0);
-	}
-	top_dark_sb->set_expand_margin_size(MARGIN_LEFT,20);
-	top_dark_sb->set_expand_margin_size(MARGIN_RIGHT,20);
-
-	top_dark_panel->add_style_override("panel",top_dark_sb);
-	VBoxContainer *top_dark_vb = memnew( VBoxContainer );
-	main_vbox->add_child(top_dark_panel);
-	top_dark_panel->add_child(top_dark_vb);
-#endif
-
 	menu_hb = memnew(HBoxContainer);
 	main_vbox->add_child(menu_hb);
 
-	//top_dark_vb->add_child(scene_tabs);
 	//left
 	left_l_hsplit = memnew(HSplitContainer);
 	main_vbox->add_child(left_l_hsplit);
@@ -5318,10 +5288,10 @@ EditorNode::EditorNode() {
 	main_hsplit->connect("dragged", this, "_dock_split_dragged");
 	right_hsplit->connect("dragged", this, "_dock_split_dragged");
 
-	dock_select_popoup = memnew(PopupPanel);
-	gui_base->add_child(dock_select_popoup);
+	dock_select_popup = memnew(PopupPanel);
+	gui_base->add_child(dock_select_popup);
 	VBoxContainer *dock_vb = memnew(VBoxContainer);
-	dock_select_popoup->add_child(dock_vb);
+	dock_select_popup->add_child(dock_vb);
 
 	HBoxContainer *dock_hb = memnew(HBoxContainer);
 	dock_tab_move_left = memnew(ToolButton);
@@ -5348,14 +5318,13 @@ EditorNode::EditorNode() {
 	dock_select->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	dock_vb->add_child(dock_select);
 
-	dock_select_popoup->set_as_minsize();
+	dock_select_popup->set_as_minsize();
 	dock_select_rect_over = -1;
 	dock_popup_selected = -1;
-	//dock_select_popoup->set_(Size2(20,20));
 	for (int i = 0; i < DOCK_SLOT_MAX; i++) {
 		dock_slot[i]->set_custom_minimum_size(Size2(230, 220) * EDSCALE);
 		dock_slot[i]->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-		dock_slot[i]->set_popup(dock_select_popoup);
+		dock_slot[i]->set_popup(dock_select_popup);
 		dock_slot[i]->connect("pre_popup_pressed", this, "_dock_pre_popup", varray(i));
 		dock_slot[i]->set_tab_align(TabContainer::ALIGN_LEFT);
 	}
@@ -5376,10 +5345,6 @@ EditorNode::EditorNode() {
 	top_split->add_child(srt);
 	srt->add_constant_override("separation", 0);
 
-	/*	main_editor_tabs  = memnew( Tabs );
-	main_editor_tabs->connect("tab_changed",this,"_editor_select");
-	main_editor_tabs->set_tab_close_display_policy(Tabs::SHOW_NEVER);
-*/
 	tab_preview_panel = memnew(Panel);
 	tab_preview_panel->set_size(Size2(100, 100) * EDSCALE);
 	tab_preview_panel->hide();
@@ -5442,7 +5407,7 @@ EditorNode::EditorNode() {
 	VisualServer::get_singleton()->viewport_set_hide_scenario(scene_root->get_viewport_rid(), true);
 	scene_root->set_disable_input(true);
 	scene_root->set_as_audio_listener_2d(true);
-	//scene_root->set_size_override(true,Size2(GlobalConfig::get_singleton()->get("display/width"),GlobalConfig::get_singleton()->get("display/height")));
+	//scene_root->set_size_override(true,Size2(ProjectSettings::get_singleton()->get("display/width"),ProjectSettings::get_singleton()->get("display/height")));
 
 	//scene_root->set_world_2d( Ref<World2D>( memnew( World2D )) );
 
@@ -5493,7 +5458,6 @@ EditorNode::EditorNode() {
 	p->add_separator();
 	p->add_shortcut(ED_SHORTCUT("editor/close_scene", TTR("Close Scene"), KEY_MASK_SHIFT + KEY_MASK_CTRL + KEY_W), FILE_CLOSE);
 	p->add_separator();
-	//p->add_shortcut(ED_SHORTCUT("editor/save_scene",TTR("Close Goto Prev. Scene")),FILE_OPEN_PREV,KEY_MASK_SHIFT+KEY_MASK_CMD+KEY_P);
 	p->add_submenu_item(TTR("Open Recent"), "RecentScenes", FILE_OPEN_RECENT);
 	p->add_separator();
 	p->add_shortcut(ED_SHORTCUT("editor/quick_open_scene", TTR("Quick Open Scene.."), KEY_MASK_SHIFT + KEY_MASK_CMD + KEY_O), FILE_QUICK_OPEN_SCENE);
@@ -5561,35 +5525,6 @@ EditorNode::EditorNode() {
 	menu_hb->add_spacer();
 	menu_hb->add_child(editor_region);
 
-//menu_hb->add_spacer();
-#if 0
-	node_menu = memnew( MenuButton );
-	node_menu->set_text("Node");
-	node_menu->set_position( Point2( 50,0) );
-	menu_panel->add_child( node_menu );
-
-	p=node_menu->get_popup();
-	p->add_item("Create",NODE_CREATE);
-	p->add_item("Instance",NODE_INSTANCE);
-	p->add_separator();
-	p->add_item("Reparent",NODE_REPARENT);
-	p->add_item("Move Up",NODE_MOVE_UP);
-	p->add_item("Move Down",NODE_MOVE_DOWN);
-	p->add_separator();
-	p->add_item("Duplicate",NODE_DUPLICATE);
-	p->add_separator();
-	p->add_item("Remove (Branch)",NODE_REMOVE_BRANCH);
-	p->add_item("Remove (Element)",NODE_REMOVE_ELEMENT);
-	p->add_separator();
-	p->add_item("Edit Subscriptions..",NODE_CONNECTIONS);
-	p->add_item("Edit Groups..",NODE_GROUPS);
-
-	resource_menu = memnew( MenuButton );
-	resource_menu->set_text("Resource");
-	resource_menu->set_position( Point2( 90,0) );
-	menu_panel->add_child( resource_menu );
-#endif
-
 	debug_menu = memnew(MenuButton);
 	debug_menu->set_text(TTR("Debug"));
 	debug_menu->add_style_override("hover", gui_base->get_stylebox("MenuHover", "EditorStyles"));
@@ -5642,7 +5577,7 @@ EditorNode::EditorNode() {
 	p = help_menu->get_popup();
 	p->connect("id_pressed", this, "_menu_option");
 	p->add_icon_item(gui_base->get_icon("ClassList", "EditorIcons"), TTR("Classes"), HELP_CLASSES);
-	p->add_icon_item(gui_base->get_icon("Help", "EditorIcons"), TTR("Search"), HELP_SEARCH);
+	p->add_icon_item(gui_base->get_icon("HelpSearch", "EditorIcons"), TTR("Search"), HELP_SEARCH);
 	p->add_separator();
 	p->add_icon_item(gui_base->get_icon("Instance", "EditorIcons"), TTR("Online Docs"), HELP_DOCS);
 	p->add_icon_item(gui_base->get_icon("Instance", "EditorIcons"), TTR("Q&A"), HELP_QA);
@@ -5650,11 +5585,6 @@ EditorNode::EditorNode() {
 	p->add_icon_item(gui_base->get_icon("Instance", "EditorIcons"), TTR("Community"), HELP_COMMUNITY);
 	p->add_separator();
 	p->add_icon_item(gui_base->get_icon("GodotDocs", "EditorIcons"), TTR("About"), HELP_ABOUT);
-
-	//Separator *s1 = memnew( VSeparator );
-	//menu_panel->add_child(s1);
-	//s1->set_position(Point2(210,4));
-	//s1->set_size(Point2(10,15));
 
 	play_cc = memnew(CenterContainer);
 	play_cc->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
@@ -5680,7 +5610,6 @@ EditorNode::EditorNode() {
 	play_button->set_shortcut(ED_SHORTCUT("editor/play", TTR("Play"), KEY_F5));
 
 	pause_button = memnew(ToolButton);
-	//menu_panel->add_child(pause_button); - not needed for now?
 	pause_button->set_toggle_mode(true);
 	pause_button->set_icon(gui_base->get_icon("Pause", "EditorIcons"));
 	pause_button->set_focus_mode(Control::FOCUS_NONE);
@@ -5708,9 +5637,6 @@ EditorNode::EditorNode() {
 	native_play_button->get_popup()->connect("id_pressed", this, "_run_in_device");
 	run_native->connect("native_run", this, "_menu_option", varray(RUN_PLAY_NATIVE));
 
-	//VSeparator *s1 = memnew( VSeparator );
-	//play_hb->add_child(s1);
-
 	play_scene_button = memnew(ToolButton);
 	play_hb->add_child(play_scene_button);
 	play_scene_button->set_toggle_mode(true);
@@ -5728,24 +5654,6 @@ EditorNode::EditorNode() {
 	play_custom_scene_button->connect("pressed", this, "_menu_option", make_binds(RUN_PLAY_CUSTOM_SCENE));
 	play_custom_scene_button->set_tooltip(TTR("Play custom scene"));
 	play_custom_scene_button->set_shortcut(ED_SHORTCUT("editor/play_custom_scene", TTR("Play Custom Scene"), KEY_MASK_CMD | KEY_MASK_SHIFT | KEY_F5));
-
-	/*
-	run_settings_button = memnew( ToolButton );
-	//menu_hb->add_child(run_settings_button);
-	//run_settings_button->set_toggle_mode(true);
-	run_settings_button->set_focus_mode(Control::FOCUS_NONE);
-	run_settings_button->set_icon(gui_base->get_icon("Run","EditorIcons"));
-	run_settings_button->connect("pressed", this,"_menu_option",make_binds(RUN_SCENE_SETTINGS));
-*/
-
-	/*
-	run_settings_button = memnew( ToolButton );
-	menu_panel->add_child(run_settings_button);
-	run_settings_button->set_position(Point2(305,0));
-	run_settings_button->set_focus_mode(Control::FOCUS_NONE);
-	run_settings_button->set_icon(gui_base->get_icon("Run","EditorIcons"));
-	run_settings_button->connect("pressed", this,"_menu_option",make_binds(RUN_SETTINGS));
-*/
 
 	progress_hb = memnew(BackgroundProgress);
 	//menu_hb->add_child(progress_hb);
@@ -5785,52 +5693,15 @@ EditorNode::EditorNode() {
 	p->add_check_item(TTR("Disable Update Spinner"), SETTINGS_UPDATE_SPINNER_HIDE);
 	p->set_item_checked(1, true);
 
-	//sources_button->connect();
-
-	/*
-	Separator *s2 = memnew( VSeparator );
-	menu_panel->add_child(s2);
-	s2->set_position(Point2(338,4));
-	s2->set_size(Point2(10,15));
-*/
-
-	//editor_hsplit = memnew( HSplitContainer );
-	//main_split->add_child(editor_hsplit);
-	//editor_hsplit->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-
-	//editor_vsplit = memnew( VSplitContainer );
-	//editor_hsplit->add_child(editor_vsplit);
-
-	//top_pallete = memnew( TabContainer );
 	scene_tree_dock = memnew(SceneTreeDock(this, scene_root, editor_selection, editor_data));
 	scene_tree_dock->set_name(TTR("Scene"));
-	//top_pallete->add_child(scene_tree_dock);
 	dock_slot[DOCK_SLOT_RIGHT_UL]->add_child(scene_tree_dock);
 #if 0
 	resources_dock = memnew( ResourcesDock(this) );
 	resources_dock->set_name("Resources");
-	//top_pallete->add_child(resources_dock);
 	dock_slot[DOCK_SLOT_RIGHT_BL]->add_child(resources_dock);
-	//top_pallete->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 #endif
 	dock_slot[DOCK_SLOT_LEFT_BR]->hide();
-	/*Control *editor_spacer = memnew( Control );
-	editor_spacer->set_custom_minimum_size(Size2(260,200));
-	editor_spacer->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	editor_vsplit->add_child( editor_spacer );
-	editor_spacer->add_child( top_pallete );
-	top_pallete->set_area_as_parent_rect();*/
-
-	//prop_pallete = memnew( TabContainer );
-
-	//prop_pallete->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-
-	/*editor_spacer = memnew( Control );
-	editor_spacer->set_custom_minimum_size(Size2(260,200));
-	editor_spacer->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	editor_vsplit->add_child( editor_spacer );
-	editor_spacer->add_child( prop_pallete );
-	prop_pallete->set_area_as_parent_rect();*/
 
 	VBoxContainer *prop_editor_base = memnew(VBoxContainer);
 	prop_editor_base->set_name(TTR("Inspector")); // Properties?
@@ -5972,7 +5843,6 @@ EditorNode::EditorNode() {
 	} else {
 		dock_slot[DOCK_SLOT_LEFT_UR]->add_child(filesystem_dock);
 	}
-	//prop_pallete->add_child(filesystem_dock);
 	filesystem_dock->connect("open", this, "open_request");
 	filesystem_dock->connect("instance", this, "_instance_request");
 
@@ -6023,17 +5893,6 @@ EditorNode::EditorNode() {
 
 	//progress_hb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 
-	/*
-	animation_menu = memnew( ToolButton );
-	animation_menu->set_position(Point2(500,0));
-	animation_menu->set_size(Size2(20,20));
-	animation_menu->set_toggle_mode(true);
-	animation_menu->set_focus_mode(Control::FOCUS_NONE);
-	menu_panel->add_child(animation_menu);
-	animation_menu->set_icon(gui_base->get_icon("Animation","EditorIcons"));
-	animation_menu->connect("pressed",this,"_animation_visibility_toggle");
-*/
-
 	orphan_resources = memnew(OrphanResourcesDialog);
 	gui_base->add_child(orphan_resources);
 
@@ -6077,7 +5936,7 @@ EditorNode::EditorNode() {
 	settings_config_dialog = memnew(EditorSettingsDialog);
 	gui_base->add_child(settings_config_dialog);
 
-	project_settings = memnew(ProjectSettings(&editor_data));
+	project_settings = memnew(ProjectSettingsEditor(&editor_data));
 	gui_base->add_child(project_settings);
 
 	import_confirmation = memnew(ConfirmationDialog);
@@ -6088,170 +5947,15 @@ EditorNode::EditorNode() {
 	import_confirmation->connect("custom_action", this, "_import_action");
 	gui_base->add_child(import_confirmation);
 
-	open_recent_confirmation = memnew(ConfirmationDialog);
-	add_child(open_recent_confirmation);
-	open_recent_confirmation->connect("confirmed", this, "_open_recent_scene_confirm");
-
 	run_settings_dialog = memnew(RunSettingsDialog);
 	gui_base->add_child(run_settings_dialog);
 
 	export_template_manager = memnew(ExportTemplateManager);
 	gui_base->add_child(export_template_manager);
 
-	{
-
-		about = memnew(AcceptDialog);
-		about->set_title(TTR("Thanks from the Godot community!"));
-		about->get_ok()->set_text(TTR("Thanks!"));
-		about->set_hide_on_ok(true);
-		about->set_resizable(true);
-		gui_base->add_child(about);
-
-		VBoxContainer *vbc = memnew(VBoxContainer);
-		HBoxContainer *hbc = memnew(HBoxContainer);
-		hbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		hbc->set_alignment(BoxContainer::ALIGN_CENTER);
-		hbc->add_constant_override("separation", 30 * EDSCALE);
-		about->add_child(vbc);
-		vbc->add_child(hbc);
-
-		TextureRect *logo = memnew(TextureRect);
-		logo->set_texture(gui_base->get_icon("Logo", "EditorIcons"));
-		hbc->add_child(logo);
-
-		Label *about_text = memnew(Label);
-		about_text->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
-		about_text->set_text(VERSION_FULL_NAME + String::utf8("\n\u00A9 2007-2017 Juan Linietsky, Ariel Manzur.\n\u00A9 2014-2017 ") +
-							 TTR("Godot Engine contributors") + "\n");
-		hbc->add_child(about_text);
-
-		TabContainer *tc = memnew(TabContainer);
-		tc->set_custom_minimum_size(Size2(600, 240) * EDSCALE);
-		tc->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-		vbc->add_child(tc);
-
-		ScrollContainer *dev_base = memnew(ScrollContainer);
-		dev_base->set_name(TTR("Authors"));
-		dev_base->set_v_size_flags(Control::SIZE_EXPAND);
-		tc->add_child(dev_base);
-
-		VBoxContainer *dev_vbc = memnew(VBoxContainer);
-		dev_vbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		dev_base->add_child(dev_vbc);
-
-		List<String> dev_sections;
-		dev_sections.push_back(TTR("Project Founders"));
-		dev_sections.push_back(TTR("Lead Developer"));
-		dev_sections.push_back(TTR("Project Manager"));
-		dev_sections.push_back(TTR("Developers"));
-
-		const char **dev_src[] = { dev_founders, dev_lead, dev_manager, dev_names };
-
-		for (int i = 0; i < dev_sections.size(); i++) {
-
-			Label *lbl = memnew(Label);
-			lbl->set_text(dev_sections[i]);
-			dev_vbc->add_child(lbl);
-
-			ItemList *il = memnew(ItemList);
-			il->set_max_columns(32);
-			il->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-			il->set_custom_minimum_size(Size2(0, i == 3 ? DEV_NAMES_COUNT * 7.6 : 30) * EDSCALE);
-			const char **dev_names_ptr = dev_src[i];
-			while (*dev_names_ptr)
-				il->add_item(String::utf8(*dev_names_ptr++), NULL, false);
-			dev_vbc->add_child(il);
-			il->set_fixed_column_width(240 * EDSCALE);
-
-			HSeparator *hs = memnew(HSeparator);
-			hs->set_modulate(Color(0, 0, 0, 0));
-			dev_vbc->add_child(hs);
-		}
-
-		TextEdit *license = memnew(TextEdit);
-		license->set_name(TTR("License"));
-		license->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		license->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-		license->set_wrap(true);
-		license->set_readonly(true);
-		license->set_text(String::utf8(about_license));
-		tc->add_child(license);
-
-		VBoxContainer *license_thirdparty = memnew(VBoxContainer);
-		license_thirdparty->set_name(TTR("Thirdparty License"));
-		license_thirdparty->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		tc->add_child(license_thirdparty);
-
-		Label *tpl_label = memnew(Label);
-		tpl_label->set_custom_minimum_size(Size2(0, 64 * EDSCALE));
-		tpl_label->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		tpl_label->set_autowrap(true);
-		tpl_label->set_text(TTR("Godot Engine relies on a number of thirdparty free and open source libraries, all compatible with the terms of its MIT license. The following is an exhaustive list of all such thirdparty components with their respective copyright statements and license terms."));
-		license_thirdparty->add_child(tpl_label);
-
-		HSplitContainer *tpl_hbc = memnew(HSplitContainer);
-		tpl_hbc->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		tpl_hbc->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-		tpl_hbc->set_split_offset(240 * EDSCALE);
-		license_thirdparty->add_child(tpl_hbc);
-
-		_tpl_tree = memnew(Tree);
-		_tpl_tree->set_hide_root(true);
-		TreeItem *root = _tpl_tree->create_item();
-		TreeItem *tpl_ti_all = _tpl_tree->create_item(root);
-		tpl_ti_all->set_text(0, TTR("All Components"));
-		TreeItem *tpl_ti_tp = _tpl_tree->create_item(root);
-		tpl_ti_tp->set_text(0, TTR("Components"));
-		tpl_ti_tp->set_selectable(0, false);
-		TreeItem *tpl_ti_lc = _tpl_tree->create_item(root);
-		tpl_ti_lc->set_text(0, TTR("Licenses"));
-		tpl_ti_lc->set_selectable(0, false);
-		int read_idx = 0;
-		String long_text = "";
-		for (int i = 0; i < THIRDPARTY_COUNT; i++) {
-
-			TreeItem *ti = _tpl_tree->create_item(tpl_ti_tp);
-			String thirdparty = String(about_thirdparty[i]);
-			ti->set_text(0, thirdparty);
-			String text = thirdparty + "\n";
-			long_text += "- " + thirdparty + "\n\n";
-			for (int j = 0; j < about_tp_copyright_count[i]; j++) {
-
-				text += "\n    Files:\n        " + String(about_tp_file[read_idx]).replace("\n", "\n        ") + "\n";
-				String copyright = String::utf8("    \u00A9 ") + String::utf8(about_tp_copyright[read_idx]).replace("\n", String::utf8("\n    \u00A9 "));
-				text += copyright;
-				long_text += copyright;
-				String license = "\n    License: " + String(about_tp_license[read_idx]) + "\n";
-				text += license;
-				long_text += license + "\n";
-				read_idx++;
-			}
-			ti->set_metadata(0, text);
-		}
-		for (int i = 0; i < LICENSE_COUNT; i++) {
-
-			TreeItem *ti = _tpl_tree->create_item(tpl_ti_lc);
-			String licensename = String(about_license_name[i]);
-			ti->set_text(0, licensename);
-			long_text += "- " + licensename + "\n\n";
-			String licensebody = String(about_license_body[i]);
-			ti->set_metadata(0, licensebody);
-			long_text += "    " + licensebody.replace("\n", "\n    ") + "\n\n";
-		}
-		tpl_ti_all->set_metadata(0, long_text);
-		tpl_hbc->add_child(_tpl_tree);
-
-		_tpl_text = memnew(TextEdit);
-		_tpl_text->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-		_tpl_text->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-		_tpl_text->set_wrap(true);
-		_tpl_text->set_readonly(true);
-		tpl_hbc->add_child(_tpl_text);
-
-		_tpl_tree->connect("item_selected", this, "_license_tree_selected");
-		tpl_ti_all->select(0);
-		_tpl_text->set_text(tpl_ti_all->get_metadata(0));
-	}
+	about = memnew(EditorAbout);
+	about->get_logo()->set_texture(gui_base->get_icon("Logo", "EditorIcons"));
+	gui_base->add_child(about);
 
 	warning = memnew(AcceptDialog);
 	gui_base->add_child(warning);
@@ -6375,7 +6079,7 @@ EditorNode::EditorNode() {
 	add_editor_plugin(memnew(TextureEditorPlugin(this)));
 	add_editor_plugin(memnew(AudioBusesEditorPlugin(audio_bus_editor)));
 	//add_editor_plugin( memnew( MaterialEditorPlugin(this) ) );
-	//add_editor_plugin( memnew( MeshEditorPlugin(this) ) );
+	add_editor_plugin(memnew(MeshEditorPlugin(this)));
 
 	for (int i = 0; i < EditorPlugins::get_plugin_count(); i++)
 		add_editor_plugin(EditorPlugins::create(i, this));
@@ -6408,7 +6112,7 @@ EditorNode::EditorNode() {
 	Physics2DServer::get_singleton()->set_active(false); // no physics by default if editor
 	ScriptServer::set_scripting_enabled(false); // no scripting by default if editor
 
-	//GlobalConfig::get_singleton()->set("render/room_cull_enabled",false);
+	//ProjectSettings::get_singleton()->set("render/room_cull_enabled",false);
 
 	reference_resource_mem = true;
 	save_external_resources_mem = true;
@@ -6421,7 +6125,7 @@ EditorNode::EditorNode() {
 		//store project name in ssettings
 		String project_name;
 		//figure it out from path
-		project_name = GlobalConfig::get_singleton()->get_resource_path().replace("\\", "/");
+		project_name = ProjectSettings::get_singleton()->get_resource_path().replace("\\", "/");
 		print_line("path: " + project_name);
 		if (project_name.length() && project_name[project_name.length() - 1] == '/')
 			project_name = project_name.substr(0, project_name.length() - 1);
@@ -6429,7 +6133,7 @@ EditorNode::EditorNode() {
 		project_name = project_name.replace("/", "::");
 
 		if (project_name != "") {
-			EditorSettings::get_singleton()->set("projects/" + project_name, GlobalConfig::get_singleton()->get_resource_path());
+			EditorSettings::get_singleton()->set("projects/" + project_name, ProjectSettings::get_singleton()->get_resource_path());
 			EditorSettings::get_singleton()->raise_order("projects/" + project_name);
 			EditorSettings::get_singleton()->save();
 		}
@@ -6506,12 +6210,14 @@ EditorNode::EditorNode() {
 	editor_data.set_edited_scene(0);
 	_update_scene_tabs();
 
+	import_dock->initialize_import_options();
+
 	{
 
 		_initializing_addons = true;
 		Vector<String> addons;
-		if (GlobalConfig::get_singleton()->has("editor_plugins/enabled")) {
-			addons = GlobalConfig::get_singleton()->get("editor_plugins/enabled");
+		if (ProjectSettings::get_singleton()->has("editor_plugins/enabled")) {
+			addons = ProjectSettings::get_singleton()->get("editor_plugins/enabled");
 		}
 
 		for (int i = 0; i < addons.size(); i++) {

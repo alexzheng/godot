@@ -34,8 +34,8 @@
 
 #include "mkvparser/mkvparser.h"
 
-#include "global_config.h"
 #include "os/file_access.h"
+#include "project_settings.h"
 
 #include "thirdparty/misc/yuv2rgb.h"
 
@@ -168,7 +168,7 @@ void VideoStreamPlaybackWebm::play() {
 
 	stop();
 
-	delay_compensation = GlobalConfig::get_singleton()->get("audio/video_delay_compensation_ms");
+	delay_compensation = ProjectSettings::get_singleton()->get("audio/video_delay_compensation_ms");
 	delay_compensation /= 1000.0;
 
 	playing = true;

@@ -35,7 +35,7 @@
 #include "editor/plugins/animation_player_editor_plugin.h"
 #include "editor/plugins/script_editor_plugin.h"
 #include "editor/script_editor_debugger.h"
-#include "global_config.h"
+#include "project_settings.h"
 #include "os/input.h"
 #include "os/keyboard.h"
 #include "print_string.h"
@@ -2007,7 +2007,7 @@ void CanvasItemEditor::_viewport_draw() {
 		VisualServer::get_singleton()->canvas_item_add_line(ci, transform.xform(display_rotate_from), transform.xform(display_rotate_to), rotate_color);
 	}
 
-	Size2 screen_size = Size2(GlobalConfig::get_singleton()->get("display/window/size/width"), GlobalConfig::get_singleton()->get("display/window/size/height"));
+	Size2 screen_size = Size2(ProjectSettings::get_singleton()->get("display/window/size/width"), ProjectSettings::get_singleton()->get("display/window/size/height"));
 
 	Vector2 screen_endpoints[4] = {
 		transform.xform(Vector2(0, 0)),
@@ -2323,7 +2323,7 @@ void CanvasItemEditor::_update_scrollbars() {
 	h_scroll->set_begin(Point2(0, size.height - hmin.height));
 	h_scroll->set_end(Point2(size.width - vmin.width, size.height));
 
-	Size2 screen_rect = Size2(GlobalConfig::get_singleton()->get("display/window/size/width"), GlobalConfig::get_singleton()->get("display/window/size/height"));
+	Size2 screen_rect = Size2(ProjectSettings::get_singleton()->get("display/window/size/width"), ProjectSettings::get_singleton()->get("display/window/size/height"));
 
 	Rect2 local_rect = Rect2(Point2(), viewport->get_size() - Size2(vmin.width, hmin.height));
 
@@ -3386,6 +3386,7 @@ CanvasItemEditor::CanvasItemEditor(EditorNode *p_editor) {
 
 	key_loc_button = memnew(Button("loc"));
 	key_loc_button->set_toggle_mode(true);
+	key_loc_button->set_flat(true);
 	key_loc_button->set_pressed(true);
 	key_loc_button->set_focus_mode(FOCUS_NONE);
 	key_loc_button->add_color_override("font_color", Color(1, 0.6, 0.6));
@@ -3394,6 +3395,7 @@ CanvasItemEditor::CanvasItemEditor(EditorNode *p_editor) {
 	animation_hb->add_child(key_loc_button);
 	key_rot_button = memnew(Button("rot"));
 	key_rot_button->set_toggle_mode(true);
+	key_rot_button->set_flat(true);
 	key_rot_button->set_pressed(true);
 	key_rot_button->set_focus_mode(FOCUS_NONE);
 	key_rot_button->add_color_override("font_color", Color(1, 0.6, 0.6));
@@ -3402,12 +3404,14 @@ CanvasItemEditor::CanvasItemEditor(EditorNode *p_editor) {
 	animation_hb->add_child(key_rot_button);
 	key_scale_button = memnew(Button("scl"));
 	key_scale_button->set_toggle_mode(true);
+	key_scale_button->set_flat(true);
 	key_scale_button->set_focus_mode(FOCUS_NONE);
 	key_scale_button->add_color_override("font_color", Color(1, 0.6, 0.6));
 	key_scale_button->add_color_override("font_color_pressed", Color(0.6, 1, 0.6));
 	key_scale_button->connect("pressed", this, "_popup_callback", varray(ANIM_INSERT_SCALE));
 	animation_hb->add_child(key_scale_button);
 	key_insert_button = memnew(Button);
+	key_insert_button->set_flat(true);
 	key_insert_button->set_focus_mode(FOCUS_NONE);
 	key_insert_button->connect("pressed", this, "_popup_callback", varray(ANIM_INSERT_KEY));
 	key_insert_button->set_tooltip(TTR("Insert Keys"));
@@ -3693,7 +3697,7 @@ bool CanvasItemEditorViewport::_create_instance(Node *parent, String &path, cons
 		}
 	}
 
-	instanced_scene->set_filename(GlobalConfig::get_singleton()->localize_path(path));
+	instanced_scene->set_filename(ProjectSettings::get_singleton()->localize_path(path));
 
 	editor_data->get_undo_redo().add_do_method(parent, "add_child", instanced_scene);
 	editor_data->get_undo_redo().add_do_method(instanced_scene, "set_owner", editor->get_edited_scene());

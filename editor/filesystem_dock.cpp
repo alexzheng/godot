@@ -31,7 +31,7 @@
 
 #include "editor_node.h"
 #include "editor_settings.h"
-#include "global_config.h"
+#include "project_settings.h"
 #include "io/resource_loader.h"
 #include "os/dir_access.h"
 #include "os/file_access.h"
@@ -153,7 +153,7 @@ void FileSystemDock::_notification(int p_what) {
 			files->connect("item_activated", this, "_select_file");
 			button_hist_next->connect("pressed", this, "_fw_history");
 			button_hist_prev->connect("pressed", this, "_bw_history");
-			search_icon->set_texture(get_icon("Search", "EditorIcons"));
+			search_box->add_icon_override("right_icon", get_icon("Search", "EditorIcons"));
 
 			button_hist_next->set_icon(get_icon("Forward", "EditorIcons"));
 			button_hist_prev->set_icon(get_icon("Back", "EditorIcons"));
@@ -879,7 +879,7 @@ void FileSystemDock::_file_option(int p_option) {
 
 			String path = files->get_item_metadata(idx);
 			if (p_option == FILE_SHOW_IN_EXPLORER) {
-				String dir = GlobalConfig::get_singleton()->globalize_path(path);
+				String dir = ProjectSettings::get_singleton()->globalize_path(path);
 				dir = dir.substr(0, dir.find_last("/"));
 				OS::get_singleton()->shell_open(String("file://") + dir);
 				return;
@@ -1067,7 +1067,7 @@ void FileSystemDock::_folder_option(int p_option) {
 			break;
 		case FOLDER_SHOW_IN_EXPLORER:
 			String path = item->get_metadata(tree->get_selected_column());
-			String dir = GlobalConfig::get_singleton()->globalize_path(path);
+			String dir = ProjectSettings::get_singleton()->globalize_path(path);
 			OS::get_singleton()->shell_open(String("file://") + dir);
 			return;
 	}
@@ -1748,10 +1748,6 @@ FileSystemDock::FileSystemDock(EditorNode *p_editor) {
 	search_box->set_h_size_flags(SIZE_EXPAND_FILL);
 	path_hb->add_child(search_box);
 	search_box->connect("text_changed", this, "_search_changed");
-
-	search_icon = memnew(TextureRect);
-	search_icon->set_stretch_mode(TextureRect::STRETCH_KEEP_CENTERED);
-	path_hb->add_child(search_icon);
 
 	button_display_mode = memnew(ToolButton);
 	path_hb->add_child(button_display_mode);
